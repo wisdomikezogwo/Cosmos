@@ -290,6 +290,16 @@ PYTHONPATH=$(pwd) python cosmos1/models/diffusion/inference/video2world.py \
     --video_save_folder outputs/Cosmos-1.0-Diffusion-7B-Video2World_wo_ps \
     --disable_prompt_upsampler \
     --num_input_frames 9
+
+# Example using 7B model with 9 input frames without prompt upsampler, using 'prompt' field in the JSONL file
+PYTHONPATH=$(pwd) python cosmos1/models/diffusion/inference/video2world.py \
+    --checkpoint_dir checkpoints \
+    --diffusion_transformer_dir Cosmos-1.0-Diffusion-7B-Video2World \
+    --batch_input_path /workspace/Cosmos/phyIQ_video2world.jsonl \
+    --video_save_folder outputs/Diffusion_7B_Video2World_wo_ps \
+    --disable_prompt_upsampler \
+    --num_input_frames 9
+
 ```
 
 ##### Example Output

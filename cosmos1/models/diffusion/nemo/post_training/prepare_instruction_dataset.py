@@ -34,10 +34,7 @@ def get_parser():
     parser = argparse.ArgumentParser(description="Process some configurations.")
     parser.add_argument("--tokenizer_dir", type=str, default="", help="Path to the VAE model")
     parser.add_argument(
-        "--dataset_path",
-        type=str,
-        default="video_dataset",
-        help="Path to the dataset. A folder of with videos, instructions, and metas subfolders.",
+        "--dataset_path", type=str, default="video_dataset", help="Path to the dataset. A folder of with videos, instructions, and metas subfolders.",
     )
     parser.add_argument("--output_path", type=str, default="video_dataset_cached", help="Path to the output directory")
     parser.add_argument("--num_chunks", type=int, default=5, help="Number of random chunks to sample per video")
@@ -97,6 +94,25 @@ def encode_for_batch(tokenizer, encoder, prompts: list[str], max_length=512):
     return encoded_text
 
 
+def create_condition_latent_from_input_frames(tokenizer, input_frames, num_frames_condition=25):
+    B, C, T, H, W = input_frames.shape
+    num_frames_encode = tokenizer.pixel_chunk_duration
+    assert (
+        input_frames.shape[2] >= num_frames_condition
+    ), f"input_frames not enough for condition, require at least {num_frames_condition}, get {input_frames.shape[2]}, {input_frames.shape}"
+    assert (
+        num_frames_encode >= num_frames_condition
+    ), f"num_frames_encode should be larger than num_frames_condition, get {num_frames_encode}, {num_frames_condition}"
+
+    # Put the conditioal frames to the begining of the video, and pad the end with zero
+    condition_frames = input_frames[:, :, -num_frames_condition:]
+    padding_frames = condition_frames.new_zeros(B, C, num_frames_encode - num_frames_condition, H, W)
+    encode_input_frames = torch.cat([condition_frames, padding_frames], dim=2).to("cuda")
+    vae = tokenizer.to(encode_input_frames.device)
+    latent = vae.encode(encode_input_frames)
+    return latent, encode_input_frames
+
+
 def main(args):
     # Set up output directory
     os.makedirs(args.output_path, exist_ok=True)
@@ -112,6 +128,7 @@ def main(args):
     # Constants
     t5_embeding_max_length = 512
     chunk_duration = vae.video_vae.pixel_chunk_duration  # Frames per chunk
+    print(f"Chunk duration: {chunk_duration}")
     cnt = 0  # File index
 
     video_folder = os.path.join(args.dataset_path, "videos")
@@ -131,6 +148,7 @@ def main(args):
             # Read video (T x H x W x C)
             video, _, meta = torchvision.io.read_video(video_path)
             T, H, W, C = video.shape
+            print(f"Video shape: {video.shape}")
 
             # Skip videos shorter than one chunk
             if T < chunk_duration:
@@ -138,13 +156,16 @@ def main(args):
                 continue
 
             # Sample random segments
-            num_unique_chunks = T - chunk_duration + 1
-            num_chunks = min(args.num_chunks, num_unique_chunks)
-            for ix in range(num_chunks):
-                if num_unique_chunks < args.num_chunks:
-                    start_idx = ix
-                else:
-                    start_idx = random.randint(0, T - chunk_duration)
+            ##num_unique_chunks = T - chunk_duration + 1
+            ##num_chunks = min(args.num_chunks, num_unique_chunks)
+            ##for ix in range(num_chunks):
+            ##    if num_unique_chunks < args.num_chunks:
+            ##        start_idx = ix
+            ##    else:
+            ##        start_idx = random.randint(0, T - chunk_duration)
+
+            for _ in range(args.num_chunks):
+                start_idx = random.randint(0, T - chunk_duration)
                 chunk = video[start_idx : start_idx + chunk_duration]  # (chunk_duration, H, W, C)
 
                 # Rearrange dimensions: (T, H, W, C) -> (T, C, H, W)
@@ -159,8 +180,18 @@ def main(args):
                 # Convert to bf16 and normalize from [0, 255] to [-1, 1]
                 chunk = chunk.to(device="cuda", dtype=torch.bfloat16, non_blocking=True) / 127.5 - 1.0
 
+                # Condition Latent (for Video2World training)
+                conditioning_chunk_len = 9
+                conditioning_chunk = chunk[:, :, :conditioning_chunk_len, ...]
+
                 # Encode video
                 latent = vae.encode(chunk).cpu()  # shape: (1, latent_channels, T//factor, H//factor, W//factor)
+
+                # Encode conditioning frames
+                conditioning_latent, _ = create_condition_latent_from_input_frames(
+                    vae, conditioning_chunk, conditioning_chunk_len
+                )
+                conditioning_latent = conditioning_latent.cpu()
 
                 # Encode text
                 out = encode_for_batch(tokenizer, text_encoder, [instruction])[0]
@@ -173,6 +204,7 @@ def main(args):
 
                 # Save data to folder
                 torch.save(latent[0], os.path.join(args.output_path, f"{cnt}.video_latent.pth"))
+                torch.save(conditioning_latent[0], os.path.join(args.output_path, f"{cnt}.conditioning_latent.pth"))
                 torch.save(t5_embed[0], os.path.join(args.output_path, f"{cnt}.t5_text_embeddings.pth"))
 
                 # Create a T5 text mask of all ones

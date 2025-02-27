@@ -389,6 +389,7 @@ class DiffusionVideo2WorldGenerationPipeline(DiffusionText2WorldGenerationPipeli
         num_video_frames: int = 121,
         seed: int = 0,
         num_input_frames: int = 1,
+        disable_guardrails: bool = False,
     ):
         """Initialize diffusion world generation pipeline.
 
@@ -412,8 +413,10 @@ class DiffusionVideo2WorldGenerationPipeline(DiffusionText2WorldGenerationPipeli
             num_video_frames: Number of frames to generate
             seed: Random seed for sampling
             num_input_frames: Number of latent conditions
+            disable_guardrails: Whether to disable guardrail safety checks
         """
         self.num_input_frames = num_input_frames
+        self.disable_guardrails = disable_guardrails
         super().__init__(
             inference_type=inference_type,
             checkpoint_dir=checkpoint_dir,
@@ -601,7 +604,7 @@ class DiffusionVideo2WorldGenerationPipeline(DiffusionText2WorldGenerationPipeli
 
         if not self.enable_prompt_upsampler:
             log.info("Run guardrail on prompt")
-            is_safe = self._run_guardrail_on_prompt_with_offload(prompt)
+            is_safe = self._run_guardrail_on_prompt_with_offload(prompt) if not self.disable_guardrails else True
             if not is_safe:
                 log.critical("Input text prompt is not safe")
                 return None
@@ -610,7 +613,7 @@ class DiffusionVideo2WorldGenerationPipeline(DiffusionText2WorldGenerationPipeli
             log.info("Run prompt upsampler on image or video, input prompt is not used")
             prompt = self._run_prompt_upsampler_on_prompt_with_offload(image_or_video_path=image_or_video_path)
             log.info("Run guardrail on upsampled prompt")
-            is_safe = self._run_guardrail_on_prompt_with_offload(prompt)
+            is_safe = self._run_guardrail_on_prompt_with_offload(prompt) if not self.disable_guardrails else True
             if not is_safe:
                 log.critical("Upsampled text prompt is not safe")
                 return None
@@ -636,7 +639,7 @@ class DiffusionVideo2WorldGenerationPipeline(DiffusionText2WorldGenerationPipeli
         log.info("Finish generation")
 
         log.info("Run guardrail on generated video")
-        video = self._run_guardrail_on_video_with_offload(video)
+        video = self._run_guardrail_on_video_with_offload(video) if not self.disable_guardrails else video
         if video is None:
             log.critical("Generated video is not safe")
             return None

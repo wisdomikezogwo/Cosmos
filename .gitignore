@@ -241,3 +241,12 @@ manifest.json
 wandb/
 onelogger.err
 onelogger.log
+
+chunk*.jsonl
+nemo_experiments/
+processed/
+robot_dataset/
+cosmos1/models/diffusion/assets/nemo_diffusion_example_data/
+test_out.mp4
+0008_perspective-center_trimmed-ball-hits-duck_Cosmos-1.0-Diffusion-7B-Video2World_no_pu.mp4
+0008_perspective-center_trimmed-ball-hits-duck_Cosmos-1.0-Diffusion-7B-Video2World.mp4

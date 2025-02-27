@@ -36,9 +36,13 @@ def create_video_guardrail_runner(checkpoint_dir: str) -> GuardrailRunner:
     """Create the video guardrail runner."""
     video_filter_checkpoint_dir = os.path.join(checkpoint_dir, "video_content_safety_filter")
     retinaface_checkpoint_path = os.path.join(checkpoint_dir, "face_blur_filter/Resnet50_Final.pth")
+    #return GuardrailRunner(
+    #    safety_models=[VideoContentSafetyFilter(video_filter_checkpoint_dir)],
+    #    postprocessors=[RetinaFaceFilter(retinaface_checkpoint_path)],
+    #)
     return GuardrailRunner(
-        safety_models=[VideoContentSafetyFilter(video_filter_checkpoint_dir)],
-        postprocessors=[RetinaFaceFilter(retinaface_checkpoint_path)],
+        safety_models=None,
+        postprocessors=None,
     )
 
 

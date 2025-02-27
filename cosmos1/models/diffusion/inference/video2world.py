@@ -60,6 +60,21 @@ def parse_arguments() -> argparse.Namespace:
         help="Number of input frames for video2world prediction",
         choices=[1, 9],
     )
+    parser.add_argument(
+        "--train_yw_data",
+        type=bool,
+        default=False,
+        help="Train the YW data",
+    )
+
+    # Add video generation arguments
+    parser.add_argument(
+        "--disable_guardrails",
+        action="store_true",
+        help="Disable guardrail model",
+    )
+    parser.add_argument('--num_chunks', type=int, default=1, help='Number of chunks to split the videos into')
+    parser.add_argument('--chunk_id', type=int, default=0, help='Chunk ID to process')
 
     return parser.parse_args()
 
@@ -112,6 +127,7 @@ def demo(cfg):
         num_video_frames=cfg.num_video_frames,
         seed=cfg.seed,
         num_input_frames=cfg.num_input_frames,
+        disable_guardrails=cfg.disable_guardrails,
     )
 
     # Handle multiple prompts if prompt file is provided
@@ -124,6 +140,22 @@ def demo(cfg):
 
     os.makedirs(cfg.video_save_folder, exist_ok=True)
     for i, input_dict in enumerate(prompts):
+
+        if cfg.train_yw_data:
+            #"visual_input": "../sampled_condition_videos/0_cond.mp4", "output_video_name": "../sampled_full_videos/0_chunk.mp4"}
+            #os.path.splitext(os.path.basename(ovn))[0].split("_")[0] + ".mp4"
+            #os.path.join("/workspace/VideoPhysics_DPO/dataset/pooled_physics/sampled_condition_videos", os.path.basename(vi))
+
+            #"visual_input": "/workspace/VideoPhysics_DPO/physics_iq/physics-IQ-benchmark/split-videos/conditioning/30FPS/0001_conditioning-videos_30FPS_perspective-left_take-1_trimmed-ball-and-block-fall.mp4",
+            #  "output_video_name": "0001_perspective-left_trimmed-ball-and-block-fall.mp4"}
+            input_dict["output_video_name"] = os.path.splitext(os.path.basename(input_dict["output_video_name"]))[0].split("_")[0] + ".mp4"  # should give 0.mp4 in this case
+            input_dict["visual_input"] = os.path.join("/workspace/VideoPhysics_DPO/dataset/pooled_physics/sampled_condition_videos", os.path.basename(input_dict["visual_input"]))
+
+        # SKIP if its been done
+        if cfg.batch_input_path and os.path.exists(os.path.join(cfg.video_save_folder, input_dict.get("output_video_name", f"{i}.mp4") )):
+            log.info(f"Skipping video generation for {input_dict.get('output_video_name', f'{i}.mp4')}")
+            continue
+
         current_prompt = input_dict.get("prompt", None)
         if current_prompt is None and cfg.disable_prompt_upsampler:
             log.critical("Prompt is missing, skipping world generation.")
@@ -149,11 +181,11 @@ def demo(cfg):
         video, prompt = generated_output
 
         if cfg.batch_input_path:
-            video_save_path = os.path.join(cfg.video_save_folder, f"{i}.mp4")
-            prompt_save_path = os.path.join(cfg.video_save_folder, f"{i}.txt")
+            video_save_path = os.path.join(cfg.video_save_folder, input_dict.get("output_video_name", f"{i}.mp4") )
+            #prompt_save_path = os.path.join(cfg.video_save_folder, f"{i}.txt")
         else:
             video_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.mp4")
-            prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
+            #prompt_save_path = os.path.join(cfg.video_save_folder, f"{cfg.video_save_name}.txt")
 
         # Save video
         save_video(
@@ -166,11 +198,11 @@ def demo(cfg):
         )
 
         # Save prompt to text file alongside video
-        with open(prompt_save_path, "wb") as f:
-            f.write(prompt.encode("utf-8"))
+        #with open(prompt_save_path, "wb") as f:
+        #    f.write(prompt.encode("utf-8"))
 
         log.info(f"Saved video to {video_save_path}")
-        log.info(f"Saved prompt to {prompt_save_path}")
+        #log.info(f"Saved prompt to {prompt_save_path}")
 
 
 if __name__ == "__main__":
