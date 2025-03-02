@@ -53,6 +53,7 @@ def cosmos_diffusion_7b_video2world_finetune() -> run.Partial:
     # Data setup
     recipe.data = videofolder_datamodule()
     recipe.data.path = ""  # path to folder with processed dataset
+    recipe.data.losing_path = ""  # path to folder with processed bad Yl dataset
 
     # Checkpoint load
     recipe.resume.restore_config = run.Config(RestoreConfig, load_artifacts=False)
