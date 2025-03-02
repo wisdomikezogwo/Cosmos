@@ -15,6 +15,8 @@
 
 import argparse
 import os
+import json
+from typing import Dict, List
 
 import numpy as np
 import torch
@@ -109,6 +111,22 @@ def parse_args():
         "--enable_prompt_upsampler", action="store_true", help="Whether to use prompt upsampling before generation"
     )
 
+    parser.add_argument(
+        "--disable_guardrails", action="store_true",
+        help="Whether to use gaurdrails on video and prompt generation"
+    )
+    parser.add_argument(
+        "--batch_input_path",
+        type=str,
+        help="Path to a JSONL file of input prompts for generating a batch of videos",
+    )
+    parser.add_argument(
+        "--video_save_folder",
+        type=str,
+        default="outputs/",
+        help="Output folder for generating a batch of videos",
+    )
+
     args = parser.parse_args()
     return args
 
@@ -118,6 +136,21 @@ def print_rank_0(string: str):
     if rank == 0:
         log.info(string)
 
+def read_prompts_from_file(prompt_file: str) -> List[Dict[str, str]]:
+    """Read prompts from a JSONL file where each line is a dict with 'prompt' key and optionally 'visual_input' key.
+
+    Args:
+        prompt_file (str): Path to JSONL file containing prompts
+
+    Returns:
+        List[Dict[str, str]]: List of prompt dictionaries
+    """
+    prompts = []
+    with open(prompt_file, "r") as f:
+        for line in f:
+            prompt_dict = json.loads(line.strip())
+            prompts.append(prompt_dict)
+    return prompts
 
 @torch.no_grad()
 def encode_for_batch(tokenizer: T5TokenizerFast, encoder: T5EncoderModel, prompts: list[str], max_length: int = 512):
@@ -178,6 +211,7 @@ def check_prompt(args):
         prompt_upsampler_dir=args.prompt_upsampler_dir,
         guardrails_dir=args.guardrail_dir,
         enable_prompt_upsampler=args.enable_prompt_upsampler,
+        use_guardrails=not args.disable_guardrails,
     )
 
     if subject_string:
@@ -382,6 +416,7 @@ def run_diffusion_inference(args, data_batch, state_shape, vae, diffusion_pipeli
             video_save_path=args.video_save_path,
             checkpoint_dir=args.cosmos_assets_dir,
             guardrails_dir=args.guardrail_dir,
+            use_guardrails= not args.disable_guardrails,
         )
         print_rank_0(f"saved video to {args.video_save_path}!")
 
@@ -401,23 +436,60 @@ def main(args):
     Utils.initialize_distributed(1, 1, context_parallel_size=args.cp_size)
     model_parallel_cuda_manual_seed(args.seed)
 
-    args.prompt = check_prompt(args)
-
     # Load video tokenizer
     print_rank_0("initializing video tokenizer...")
     vae = init_video_tokenizer(args)
 
-    # Prepare data batch
-    print_rank_0("preparing data batch...")
-    data_batch, state_shape = prepare_data_batch(args, vae)
-
     # Setup model / diffusion pipeline
     print_rank_0("setting up diffusion pipeline...")
     diffusion_pipeline = setup_diffusion_pipeline(args)
+    
 
-    # Generate video from prompt
-    print_rank_0("generating video...")
-    run_diffusion_inference(args, data_batch, state_shape, vae, diffusion_pipeline)
+
+    # Handle multiple prompts if prompt file is provided
+    if args.batch_input_path:
+        log.info(f"Reading batch inputs from path: {args.batch_input_path}")
+        prompts = read_prompts_from_file(args.batch_input_path)
+    else:
+        # Single prompt case
+        prompts = [{"prompt": args.prompt, "visual_input": args.conditioned_image_or_video_path}]
+
+
+    if args.video_save_folder:
+        os.makedirs(args.video_save_folder, exist_ok=True)
+
+    for i, input_dict in enumerate(prompts):
+        # SKIP if its been done
+        if args.batch_input_path and os.path.exists(os.path.join(args.video_save_folder, input_dict.get("output_video_name", f"{i}.mp4") )):
+            log.info(f"Skipping video generation for {input_dict.get('output_video_name', f'{i}.mp4')}")
+            continue
+
+        current_prompt = input_dict.get("prompt", None)
+        if current_prompt is None:
+            log.critical("Prompt is missing, skipping world generation.")
+            continue
+
+        current_image_or_video_path = input_dict.get("visual_input", None)
+        if current_image_or_video_path is None:
+            log.critical("Visual input is missing, skipping world generation.")
+            continue
+
+        args.conditioned_image_or_video_path = current_image_or_video_path
+        args.prompt = current_prompt
+        args.prompt = check_prompt(args)
+
+        if args.batch_input_path:
+            args.video_save_path = os.path.join(args.video_save_folder, input_dict.get("output_video_name", f"{i}.mp4") )
+        
+        
+        # Prepare data batch
+        print_rank_0("preparing data batch...")
+        data_batch, state_shape = prepare_data_batch(args, vae)
+
+        
+        # Generate video from prompt
+        print_rank_0("generating video...")
+        run_diffusion_inference(args, data_batch, state_shape, vae, diffusion_pipeline)
 
 
 if __name__ == "__main__":

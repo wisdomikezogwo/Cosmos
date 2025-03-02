@@ -73,6 +73,7 @@ def process_prompt(
     guardrails_dir: str,
     image_path: str = None,
     enable_prompt_upsampler: bool = True,
+    use_guardrails: bool = True,
 ) -> str:
     """
     Handle prompt upsampling if enabled, then run guardrails to ensure safety.
@@ -88,11 +89,14 @@ def process_prompt(
     Returns:
         str: The upsampled prompt or original prompt if upsampling is disabled or fails.
     """
+    if use_guardrails:
+        text_guardrail = create_text_guardrail_runner(os.path.join(checkpoint_dir, guardrails_dir))
 
-    text_guardrail = create_text_guardrail_runner(os.path.join(checkpoint_dir, guardrails_dir))
-
-    # Check if the prompt is safe
-    is_safe = run_text_guardrail(str(prompt), text_guardrail)
+        # Check if the prompt is safe
+        is_safe = run_text_guardrail(str(prompt), text_guardrail)
+    else:
+        is_safe = True
+        
     if not is_safe:
         raise ValueError("Guardrail blocked world generation.")
 
@@ -126,6 +130,7 @@ def save_video(
     video_save_path: str,
     checkpoint_dir: str,
     guardrails_dir: str,
+    use_guardrails: bool = True,
 ):
     """
     Save video frames to file, applying a safety check before writing.
@@ -140,10 +145,11 @@ def save_video(
         checkpoint_dir (str): Directory containing model checkpoints.
         guardrails_dir (str): Directory containing guardrails weights.
     """
-    video_classifier_guardrail = create_video_guardrail_runner(os.path.join(checkpoint_dir, guardrails_dir))
+    if use_guardrails:
+        video_classifier_guardrail = create_video_guardrail_runner(os.path.join(checkpoint_dir, guardrails_dir))
 
-    # Safety check on the entire video
-    grid = run_video_guardrail(grid, video_classifier_guardrail)
+        # Safety check on the entire video
+        grid = run_video_guardrail(grid, video_classifier_guardrail)
 
     kwargs = {
         "fps": fps,
