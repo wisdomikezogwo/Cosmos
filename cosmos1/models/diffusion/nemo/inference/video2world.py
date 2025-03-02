@@ -126,6 +126,7 @@ def parse_args():
         default="outputs/",
         help="Output folder for generating a batch of videos",
     )
+    parser.add_argument("--weka", type=str, default="", help="Path to weka videos if running on prior budget")
 
     args = parser.parse_args()
     return args
@@ -473,6 +474,12 @@ def main(args):
         if current_image_or_video_path is None:
             log.critical("Visual input is missing, skipping world generation.")
             continue
+        
+        if args.weka:
+            # args.weka: /weka/prior-default/wisdomi/physics-IQ-benchmark
+            # current_ ..._path: /workspace/VideoPhysics_DPO/physics_iq/physics-IQ-benchmark/split-videos/conditioning/30FPS/0001_conditioning-videos_30FPS_perspective-left_take-1_trimmed-ball-and-block-fall.mp4"
+            current_image_or_video_path = os.path.join(args.weka, os.path.relpath(current_image_or_video_path, "/workspace/VideoPhysics_DPO/physics_iq/physics-IQ-benchmark"))
+            
 
         args.conditioned_image_or_video_path = current_image_or_video_path
         args.prompt = current_prompt
@@ -481,7 +488,7 @@ def main(args):
         if args.batch_input_path:
             args.video_save_path = os.path.join(args.video_save_folder, input_dict.get("output_video_name", f"{i}.mp4") )
         
-        
+
         # Prepare data batch
         print_rank_0("preparing data batch...")
         data_batch, state_shape = prepare_data_batch(args, vae)
