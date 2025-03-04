@@ -493,7 +493,9 @@ def main(args):
         print_rank_0("preparing data batch...")
         data_batch, state_shape = prepare_data_batch(args, vae)
 
-        
+        print(f"condition_latent shape: {data_batch['condition_latent'].shape}")
+        print(f" video shape: {data_batch['video'].shape}")
+
         # Generate video from prompt
         print_rank_0("generating video...")
         run_diffusion_inference(args, data_batch, state_shape, vae, diffusion_pipeline)
