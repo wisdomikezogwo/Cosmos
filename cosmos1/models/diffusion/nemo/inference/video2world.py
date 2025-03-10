@@ -482,6 +482,10 @@ def main(args):
             
 
         args.conditioned_image_or_video_path = current_image_or_video_path
+        # check if path exist if not break out ir skip
+        if not os.path.exists(args.conditioned_image_or_video_path):
+            log.critical(f"Conditioned image or video path does not exist: {args.conditioned_image_or_video_path}, skipping world generation.")
+            continue
         args.prompt = current_prompt
         args.prompt = check_prompt(args)
 
