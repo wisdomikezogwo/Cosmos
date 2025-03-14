@@ -18,7 +18,7 @@ import os
 import nemo_run as run
 from huggingface_hub import snapshot_download
 from nemo.collections import llm
-from nemo.collections.diffusion.models.model import DiT7BVideo2WorldConfig, DiT14BVideo2WorldConfig
+from nemo.collections.diffusion.models.model import DiT7BVideo2WorldConfig, DiT7BVideo2WorldConfigDPO, DiT14BVideo2WorldConfig
 from nemo.collections.diffusion.train import pretrain, videofolder_datamodule
 from nemo.lightning.pytorch.strategies.utils import RestoreConfig
 
@@ -68,10 +68,10 @@ def cosmos_diffusion_7b_video2world_finetune() -> run.Partial:
     return recipe
 
 @run.cli.factory(target=llm.train)
-def cosmos_diffusion_7b_video2world_finetune_local() -> run.Partial:
+def cosmos_diffusion_7b_video2world_finetune_dpo() -> run.Partial:
     # Model setup
     recipe = pretrain()
-    recipe.model.config = run.Config(DiT7BVideo2WorldConfig)
+    recipe.model.config = run.Config(DiT7BVideo2WorldConfigDPO)
 
     # Trainer setup
     recipe.trainer.max_steps = 1000
@@ -97,8 +97,6 @@ def cosmos_diffusion_7b_video2world_finetune_local() -> run.Partial:
     # Data setup
     recipe.data = videofolder_datamodule()
     recipe.data.path = ""  # path to folder with processed dataset
-    recipe.data.micro_batch_size = 2
-    recipe.data.global_batch_size = 2
 
     # Checkpoint load
     recipe.resume.restore_config = run.Config(RestoreConfig, load_artifacts=False)
@@ -111,7 +109,6 @@ def cosmos_diffusion_7b_video2world_finetune_local() -> run.Partial:
     recipe.log.log_dir = "nemo_experiments/cosmos_diffusion_7b_video2world_finetune"
 
     return recipe
-
 
 @run.cli.factory(target=llm.train)
 def cosmos_diffusion_14b_video2world_finetune() -> run.Partial:
