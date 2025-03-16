@@ -444,8 +444,6 @@ def main(args):
     # Setup model / diffusion pipeline
     print_rank_0("setting up diffusion pipeline...")
     diffusion_pipeline = setup_diffusion_pipeline(args)
-    
-
 
     # Handle multiple prompts if prompt file is provided
     if args.batch_input_path:
@@ -491,14 +489,12 @@ def main(args):
 
         if args.batch_input_path:
             args.video_save_path = os.path.join(args.video_save_folder, input_dict.get("output_video_name", f"{i}.mp4") )
+        else:
+            args.video_save_path = os.path.join(args.video_save_folder, args.video_save_path)
         
-
         # Prepare data batch
-        print_rank_0("preparing data batch...")
+        print(f"preparing data batch")
         data_batch, state_shape = prepare_data_batch(args, vae)
-
-        print(f"condition_latent shape: {data_batch['condition_latent'].shape}")
-        print(f" video shape: {data_batch['video'].shape}")
 
         # Generate video from prompt
         print_rank_0("generating video...")
