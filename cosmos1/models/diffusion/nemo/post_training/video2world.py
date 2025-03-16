@@ -18,7 +18,7 @@ import os
 import nemo_run as run
 from huggingface_hub import snapshot_download
 from nemo.collections import llm
-from nemo.collections.diffusion.models.model import DiT7BVideo2WorldConfig, DiT7BVideo2WorldConfigDPO, DiT14BVideo2WorldConfig
+from nemo.collections.diffusion.models.model import DiT7BVideo2WorldConfig, DiT14BVideo2WorldConfig
 from nemo.collections.diffusion.train import pretrain, videofolder_datamodule
 from nemo.lightning.pytorch.strategies.utils import RestoreConfig
 
@@ -54,49 +54,6 @@ def cosmos_diffusion_7b_video2world_finetune() -> run.Partial:
     recipe.data = videofolder_datamodule()
     recipe.data.path = ""  # path to folder with processed dataset
     #recipe.data.losing_path = ""  # path to folder with processed bad Yl dataset
-
-    # Checkpoint load
-    recipe.resume.restore_config = run.Config(RestoreConfig, load_artifacts=False)
-    recipe.resume.restore_config.path = os.path.join(
-        snapshot_download("nvidia/Cosmos-1.0-Diffusion-7B-Video2World", allow_patterns=["nemo/*"]), "nemo"
-    )  # path to diffusion model checkpoint
-    recipe.resume.resume_if_exists = False
-
-    # Directory to save checkpoints / logs
-    recipe.log.log_dir = "nemo_experiments/cosmos_diffusion_7b_video2world_finetune"
-
-    return recipe
-
-@run.cli.factory(target=llm.train)
-def cosmos_diffusion_7b_video2world_finetune_dpo() -> run.Partial:
-    # Model setup
-    recipe = pretrain()
-    recipe.model.config = run.Config(DiT7BVideo2WorldConfigDPO)
-
-    # Trainer setup
-    recipe.trainer.max_steps = 1000
-    recipe.optim.config.lr = 1e-6
-
-    # Tensor / Sequence parallelism
-    recipe.trainer.strategy.tensor_model_parallel_size = 8
-    recipe.trainer.strategy.sequence_parallel = True
-    recipe.trainer.strategy.ckpt_async_save = False
-
-    # FSDP
-    recipe.trainer.strategy.ddp.with_megatron_fsdp_code_path = True
-    recipe.trainer.strategy.ddp.data_parallel_sharding_strategy = "MODEL_AND_OPTIMIZER_STATES"
-    recipe.trainer.strategy.ddp.overlap_param_gather = True
-    recipe.trainer.strategy.ddp.overlap_grad_reduce = True
-    recipe.model.config.use_cpu_initialization = True
-
-    # Activation Checkpointing
-    recipe.model.config.recompute_granularity = "full"
-    recipe.model.config.recompute_method = "uniform"
-    recipe.model.config.recompute_num_layers = 1
-
-    # Data setup
-    recipe.data = videofolder_datamodule()
-    recipe.data.path = ""  # path to folder with processed dataset
 
     # Checkpoint load
     recipe.resume.restore_config = run.Config(RestoreConfig, load_artifacts=False)
