@@ -45,7 +45,7 @@ def cosmos_diffusion_7b_video2world_finetune() -> run.Partial:
     recipe.trainer.strategy.ddp.overlap_grad_reduce = True
     recipe.model.config.use_cpu_initialization = True
     
-    recipe.trainer.callbacks.every_n_train_steps=1000
+    recipe.trainer.callbacks[0].every_n_train_steps=1000
 
     # Activation Checkpointing
     recipe.model.config.recompute_granularity = "full"
