@@ -17,7 +17,6 @@ import argparse
 import glob
 import json
 import os
-import random
 
 import torch
 import torchvision
@@ -35,11 +34,8 @@ def get_parser():
     parser.add_argument("--tokenizer_dir", type=str, default="", help="Path to the VAE model")
     parser.add_argument("--dataset_path", type=str, default="video_dataset", help="Path to the dataset. Should contain 'videos' and 'instructions' folders.",)
     parser.add_argument("--output_path", type=str, default="video_dataset_cached", help="Path to the output directory (latents, etc.)")
-    
-    parser.add_argument("--sampled_path", type=str, default="sample_videos", help="Path to save sampled video chunks")
-    parser.add_argument("--sampled_cond", type=str, default="sample_conditions", help="Path to save sampled conditioning clips")
-
     parser.add_argument("--num_chunks", type=int, default=1, help="Number of random 130-frame samples to generate per video")
+    parser.add_argument("--chunk", type=int, default=0, help="Chunk index to process")
     parser.add_argument("--height", type=int, default=704, help="Height to resize video frames")
     parser.add_argument("--width", type=int, default=1280, help="Width to resize video frames")
     return parser
@@ -179,6 +175,17 @@ def main(args):
 
     video_folder = args.dataset_path
     video_paths = glob.glob(os.path.join(video_folder, "*.mp4"))
+    
+    video_paths.sort()
+    # Split sorted video paths based on args.num_chunks
+    video_paths_split = [video_paths[i::args.num_chunks] for i in range(args.num_chunks)]
+    
+    # Select the chunk for this run based on args.chunk
+    if args.chunk < 0 or args.chunk >= args.num_chunks:
+        raise ValueError(f"Invalid chunk index: {args.chunk}. Must be between 0 and {args.num_chunks - 1}.")
+    
+    video_paths = video_paths_split[args.chunk]
+
     if not video_paths:
         raise ValueError(f"No .mp4 files found in {video_folder}. Check dataset_path?")
 
@@ -187,6 +194,10 @@ def main(args):
         for video_path in tqdm(video_paths):
             # NO text embedding, i.e resue same instruction for all videos
             cnt = int(os.path.splitext(os.path.basename(video_path))[0])
+
+            if os.path.exists(os.path.join(args.output_path, f"{cnt}.info.json")):
+                log.info(f"Video {video_path} already processed, skipping.")
+                continue
 
             # Read the entire video
             video, _, meta = torchvision.io.read_video(video_path) #  shape: (T, H, W, C), dtype uint8, range [0..255]
@@ -218,15 +229,8 @@ def main(args):
                     log.info(f"Video {video_path} has {T} frames (<=121) after resampling. Skipped.")
                     continue
 
-            # Now we are guaranteed T >= 130
-            # We'll sample up to `args.num_chunks` random segments of length 130
-            # (with the first 9 frames as conditioning).
-
-            # if we have long video use more chunks than args.num_chunks
-            assert args.num_chunks == 1, "Only 1 chunk per video first and then based on T its increased in code"
-
             # Extract chunk of shape (130, H, W, C)
-            chunk = video[0:]  # shape: (120, H, W, C)
+            chunk = video[:]  # shape: (120, H, W, C)
 
             # (4) Convert chunk to shape (B=1, C, T=130, H, W) in [-1,1] float for the VAE
             # Rearrange dimensions: (T, H, W, C) -> (T, C, H, W)
