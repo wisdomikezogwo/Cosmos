@@ -177,14 +177,16 @@ def main(args):
     video_paths = glob.glob(os.path.join(video_folder, "*.mp4"))
     
     video_paths.sort()
-    # Split sorted video paths based on args.num_chunks
-    video_paths_split = [video_paths[i::args.num_chunks] for i in range(args.num_chunks)]
-    
-    # Select the chunk for this run based on args.chunk
-    if args.chunk < 0 or args.chunk >= args.num_chunks:
-        raise ValueError(f"Invalid chunk index: {args.chunk}. Must be between 0 and {args.num_chunks - 1}.")
-    
-    video_paths = video_paths_split[args.chunk]
+    if args.num_chunks > 1:
+        # Split sorted video paths based on args.num_chunks
+        video_paths_split = [video_paths[i::args.num_chunks] for i in range(args.num_chunks)]
+        
+        # Select the chunk for this run based on args.chunk
+        if args.chunk < 0 or args.chunk >= args.num_chunks:
+            raise ValueError(f"Invalid chunk index: {args.chunk}. Must be between 0 and {args.num_chunks - 1}.")
+        
+        video_paths = video_paths_split[args.chunk]
+    print(f"len of paths: {len(video_paths)}")
 
     if not video_paths:
         raise ValueError(f"No .mp4 files found in {video_folder}. Check dataset_path?")
@@ -211,6 +213,9 @@ def main(args):
 
             if T < 1:
                 log.info(f"Video {video_path} is empty after resampling, skipping.")
+                # Move the video to the provided path, to be deleted later as they are bad videos
+                new_video_path = os.path.join('/workspace/VideoPhysics_DPO/outputs/', os.path.basename(video_path))
+                os.rename(video_path, new_video_path)
                 continue
 
             assert chunk_total_frames == T, f"Expected {chunk_total_frames} frames, got {T}."
