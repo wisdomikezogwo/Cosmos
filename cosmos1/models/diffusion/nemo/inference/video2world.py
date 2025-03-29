@@ -473,10 +473,11 @@ def main(args):
             log.critical("Visual input is missing, skipping world generation.")
             continue
         
-        if args.weka:
+        if args.weka: # i.e testing pretrained model
             # args.weka: /weka/prior-default/wisdomi/physics-IQ-benchmark
             # current_ ..._path: /workspace/VideoPhysics_DPO/physics_iq/physics-IQ-benchmark/split-videos/conditioning/30FPS/0001_conditioning-videos_30FPS_perspective-left_take-1_trimmed-ball-and-block-fall.mp4"
             current_image_or_video_path = os.path.join(args.weka, os.path.relpath(current_image_or_video_path, "/workspace/VideoPhysics_DPO/physics_iq/physics-IQ-benchmark"))
+            current_image_or_video_path = current_image_or_video_path.replace("30FPS", "24FPS")
             
 
         args.conditioned_image_or_video_path = current_image_or_video_path
